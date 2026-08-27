@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Bohème Intelligence — Revisione bandi</title>
+<style>
+  :root {
+    --bg: #16171a;
+    --fg: #eee;
+    --muted: #9a9a9a;
+    --line: #2c2d31;
+    --accent: #d98a3d;
+    --accent-danger: #c0503f;
+    --card-bg: #1d1e22;
+    --ok: #4f9d6e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+  }
+  header {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  header h1 {
+    font-size: 1.4rem;
+    margin: 0;
+  }
+  header .sotto {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1.5rem 4rem;
+  }
+  button {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.85rem;
+  }
+  input, textarea {
+    font: inherit;
+    background: #101114;
+    color: var(--fg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.5rem 0.6rem;
+    width: 100%;
+  }
+  textarea { min-height: 5rem; resize: vertical; }
+  label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 0.2rem;
+    margin-top: 0.7rem;
+  }
+
+  /* ---- login ---- */
+  #login {
+    max-width: 320px;
+    margin: 4rem auto;
+    padding: 1.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  #login h2 { margin-top: 0; font-size: 1.1rem; }
+  #login button {
+    margin-top: 1rem;
+    width: 100%;
+    background: var(--accent);
+    color: #1a1a1a;
+    font-weight: 600;
+    padding: 0.6rem;
+  }
+  #login-errore {
+    color: var(--accent-danger);
+    font-size: 0.85rem;
+    margin-top: 0.6rem;
+    min-height: 1.2em;
+  }
+
+  /* ---- elenco ---- */
+  .filtri {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+  .filtri button {
+    background: var(--card-bg);
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .filtri button.attivo {
+    background: var(--accent);
+    color: #1a1a1a;
+    border-color: var(--accent);
+  }
+  ul.elenco { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.7rem; }
+  .bando {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+  }
+  .bando .riga-sommario {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+  }
+  .bando .riga-sommario .titolo {
+    font-weight: 600;
+  }
+  .bando .riga-sommario .titolo .ente {
+    font-weight: 400;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-left: 0.5rem;
+  }
+  .badge {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .badge.pubblicato { background: rgba(79,157,110,0.2); color: var(--ok); }
+  .badge.bozza { background: rgba(217,138,61,0.2); color: var(--accent); }
+  .link-veloci { margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap; }
+  .link-veloci a { color: var(--accent); font-size: 0.82rem; text-decoration: none; }
+  .link-veloci a:hover { text-decoration: underline; }
+
+  .modulo { display: none; margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+  .bando.aperto .modulo { display: block; }
+  .modulo .griglia {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 1rem;
+  }
+  .modulo .griglia .campo-largo { grid-column: 1 / -1; }
+  .azioni {
+    margin-top: 1.2rem;
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .azioni .salva { background: #3a3b40; color: var(--fg); }
+  .azioni .approva { background: var(--ok); color: #0d1a12; font-weight: 600; }
+  .azioni .annulla-pub { background: #3a3b40; color: var(--fg); }
+  .azioni .scarta { background: var(--accent-danger); color: #fff; }
+  .messaggio { font-size: 0.82rem; margin-top: 0.5rem; min-height: 1.2em; }
+  .messaggio.ok { color: var(--ok); }
+  .messaggio.errore { color: var(--accent-danger); }
+
+  #stato-elenco { color: var(--muted); padding: 2rem 0; text-align: center; }
+  #logout { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h2>Revisione bandi</h2>
+  <label for="login-email">Email</label>
+  <input id="login-email" type="email" autocomplete="username">
+  <label for="login-password">Password</label>
+  <input id="login-password" type="password" autocomplete="current-password">
+  <button id="login-bottone">Entra</button>
+  <div id="login-errore"></div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>Revisione bandi</h1>
+    <div>
+      <span class="sotto" id="utente-corrente"></span>
+      <button id="logout">Esci</button>
+    </div>
+  </header>
+  <main>
+    <div class="filtri">
+      <button data-filtro="da-rivedere" class="attivo">Da rivedere</button>
+      <button data-filtro="pubblicati">Pubblicati</button>
+      <button data-filtro="tutti">Tutti</button>
+    </div>
+    <div id="stato-elenco"></div>
+    <ul id="elenco" class="elenco"></ul>
+  </main>
+</div>
+
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "https://aqgxgdpsjyidambwipqg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_COi81UtfEAr0grmvCHqMMQ_pVJEWl4k";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const CAMPI_MODIFICABILI = [
+  ["title", "Titolo", "input"],
+  ["organization_name", "Ente", "input"],
+  ["organization_website", "Sito dell'ente", "input"],
+  ["organization_country", "Paese dell'ente", "input"],
+  ["application_email", "Email per candidarsi", "input"],
+  ["opportunity_url", "Link al bando", "input"],
+  ["deadline", "Scadenza (AAAA-MM-GG)", "input"],
+  ["cost", "Costo", "input"],
+  ["prizes", "Premi", "input"],
+  ["exhibition", "Esposizione", "input"],
+  ["location", "Dove", "input"],
+  ["disciplines", "Discipline", "input"],
+  ["eligibility", "Chi può partecipare", "textarea"],
+  ["description", "Descrizione", "textarea"],
+];
+
+const loginEl = document.getElementById("login");
+const appEl = document.getElementById("app");
+const loginEmail = document.getElementById("login-email");
+const loginPassword = document.getElementById("login-password");
+const loginErrore = document.getElementById("login-errore");
+const utenteCorrente = document.getElementById("utente-corrente");
+const statoElenco = document.getElementById("stato-elenco");
+const elencoEl = document.getElementById("elenco");
+
+let filtroAttuale = "da-rivedere";
+let bandi = [];
+
+function mostraApp(sessione) {
+  loginEl.hidden = true;
+  appEl.hidden = false;
+  utenteCorrente.textContent = sessione.user.email;
+  caricaBandi();
+}
+
+function mostraLogin() {
+  loginEl.hidden = false;
+  appEl.hidden = true;
+}
+
+document.getElementById("login-bottone").addEventListener("click", async () => {
+  loginErrore.textContent = "";
+  const { error } = await supabase.auth.signInWithPassword({
+    email: loginEmail.value.trim(),
+    password: loginPassword.value,
+  });
+  if (error) loginErrore.textContent = "Accesso non riuscito: controlla email e password.";
+});
+
+document.getElementById("logout").addEventListener("click", () => supabase.auth.signOut());
+
+supabase.auth.onAuthStateChange((_evento, sessione) => {
+  if (sessione) mostraApp(sessione);
+  else mostraLogin();
+});
+
+document.querySelectorAll(".filtri button").forEach((bottone) => {
+  bottone.addEventListener("click", () => {
+    document.querySelectorAll(".filtri button").forEach((b) => b.classList.remove("attivo"));
+    bottone.classList.add("attivo");
+    filtroAttuale = bottone.dataset.filtro;
+    disegnaElenco();
+  });
+});
+
+async function caricaBandi() {
+  statoElenco.textContent = "Carico i bandi…";
+  elencoEl.innerHTML = "";
+  const { data, error } = await supabase
+    .from("open_calls")
+    .select("*")
+    .order("published", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    statoElenco.textContent = "Non riesco a leggere i bandi: " + error.message;
+    return;
+  }
+  bandi = data;
+  disegnaElenco();
+}
+
+function corrisponde(bando) {
+  if (filtroAttuale === "pubblicati") return bando.published;
+  if (filtroAttuale === "tutti") return true;
+  return !bando.published; // da-rivedere
+}
+
+function statoDaScadenza(deadlineIso) {
+  // Stessa regola di python/db/open_calls_sync.py::status_from_deadline:
+  // tenerle allineate se cambia una delle due.
+  if (!deadlineIso) return "pending";
+  const scadenza = new Date(deadlineIso);
+  if (isNaN(scadenza.getTime())) return "pending";
+  const oggi = new Date();
+  oggi.setHours(0, 0, 0, 0);
+  return scadenza < oggi ? "expired" : "open";
+}
+
+function disegnaElenco() {
+  const visibili = bandi.filter(corrisponde);
+  statoElenco.textContent = visibili.length ? "" : "Nessun bando in questa vista.";
+  elencoEl.innerHTML = "";
+  visibili.forEach((bando) => elencoEl.appendChild(creaRigaBando(bando)));
+}
+
+function creaRigaBando(bando) {
+  const li = document.createElement("li");
+  li.className = "bando";
+
+  const sommario = document.createElement("div");
+  sommario.className = "riga-sommario";
+  sommario.innerHTML = `
+    <div class="titolo">${escapeHtml(bando.title || "Senza titolo")}
+      ${bando.organization_name ? `<span class="ente">${escapeHtml(bando.organization_name)}</span>` : ""}
+    </div>
+    <span class="badge ${bando.published ? "pubblicato" : "bozza"}">${bando.published ? "Pubblicato" : "Da rivedere"}</span>
+  `;
+  sommario.addEventListener("click", () => li.classList.toggle("aperto"));
+  li.appendChild(sommario);
+
+  const linkVeloci = document.createElement("div");
+  linkVeloci.className = "link-veloci";
+  if (bando.opportunity_url) linkVeloci.innerHTML += `<a href="${attr(bando.opportunity_url)}" target="_blank" rel="noopener">Link al bando →</a>`;
+  if (bando.organization_website) linkVeloci.innerHTML += `<a href="${attr(bando.organization_website)}" target="_blank" rel="noopener">Sito dell'ente →</a>`;
+  if (linkVeloci.innerHTML) li.appendChild(linkVeloci);
+
+  li.appendChild(creaModulo(bando));
+  return li;
+}
+
+function creaModulo(bando) {
+  const div = document.createElement("div");
+  div.className = "modulo";
+
+  const griglia = document.createElement("div");
+  griglia.className = "griglia";
+  const input = {};
+
+  CAMPI_MODIFICABILI.forEach(([campo, etichetta, tipo]) => {
+    const wrapper = document.createElement("div");
+    if (tipo === "textarea") wrapper.className = "campo-largo";
+    const label = document.createElement("label");
+    label.textContent = etichetta;
+    const el = document.createElement(tipo);
+    el.value = bando[campo] ? (campo === "deadline" ? String(bando[campo]).slice(0, 10) : bando[campo]) : "";
+    input[campo] = el;
+    wrapper.appendChild(label);
+    wrapper.appendChild(el);
+    griglia.appendChild(wrapper);
+  });
+  div.appendChild(griglia);
+
+  const azioni = document.createElement("div");
+  azioni.className = "azioni";
+
+  const messaggio = document.createElement("div");
+  messaggio.className = "messaggio";
+
+  function leggiModifiche() {
+    const modifiche = {};
+    CAMPI_MODIFICABILI.forEach(([campo]) => {
+      modifiche[campo] = input[campo].value.trim() || null;
+    });
+    modifiche.status = statoDaScadenza(modifiche.deadline);
+    return modifiche;
+  }
+
+  async function salva(extra, testoOk) {
+    messaggio.className = "messaggio";
+    messaggio.textContent = "Salvo…";
+    const { error } = await supabase
+      .from("open_calls")
+      .update({ ...leggiModifiche(), ...extra })
+      .eq("id", bando.id);
+
+    if (error) {
+      messaggio.className = "messaggio errore";
+      messaggio.textContent = "Errore: " + error.message;
+      return;
+    }
+    Object.assign(bando, leggiModifiche(), extra);
+    messaggio.className = "messaggio ok";
+    messaggio.textContent = testoOk;
+    disegnaElenco();
+  }
+
+  const bottoneSalva = document.createElement("button");
+  bottoneSalva.className = "salva";
+  bottoneSalva.textContent = "Salva modifiche";
+  bottoneSalva.addEventListener("click", () => salva({}, "Modifiche salvate."));
+  azioni.appendChild(bottoneSalva);
+
+  const bottoneApprova = document.createElement("button");
+  bottoneApprova.className = "approva";
+  bottoneApprova.textContent = "Approva e pubblica";
+  bottoneApprova.addEventListener("click", () =>
+    salva({ verified: true, published: true }, "Pubblicato: ora è visibile sul sito.")
+  );
+  azioni.appendChild(bottoneApprova);
+
+  if (bando.published) {
+    const bottoneAnnulla = document.createElement("button");
+    bottoneAnnulla.className = "annulla-pub";
+    bottoneAnnulla.textContent = "Annulla pubblicazione";
+    bottoneAnnulla.addEventListener("click", () =>
+      salva({ published: false }, "Tolto dal sito pubblico.")
+    );
+    azioni.appendChild(bottoneAnnulla);
+  }
+
+  const bottoneScarta = document.createElement("button");
+  bottoneScarta.className = "scarta";
+  bottoneScarta.textContent = "Scarta";
+  bottoneScarta.addEventListener("click", async () => {
+    if (!confirm("Eliminare definitivamente questo bando?")) return;
+    const { error } = await supabase.from("open_calls").delete().eq("id", bando.id);
+    if (error) {
+      messaggio.className = "messaggio errore";
+      messaggio.textContent = "Errore: " + error.message;
+      return;
+    }
+    bandi = bandi.filter((b) => b.id !== bando.id);
+    disegnaElenco();
+  });
+  azioni.appendChild(bottoneScarta);
+
+  div.appendChild(azioni);
+  div.appendChild(messaggio);
+  return div;
+}
+
+function escapeHtml(testo) {
+  const d = document.createElement("div");
+  d.textContent = testo;
+  return d.innerHTML;
+}
+function attr(testo) {
+  return escapeHtml(testo).replace(/"/g, "&quot;");
+}
+</script>
+
+</body>
+</html>

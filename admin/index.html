@@ -149,6 +149,7 @@
   .link-veloci { margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap; }
   .link-veloci a { color: var(--accent); font-size: 0.82rem; text-decoration: none; }
   .link-veloci a:hover { text-decoration: underline; }
+  .link-verificato { color: var(--ok); font-size: 0.82rem; }
 
   .modulo { display: none; margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 1rem; }
   .bando.aperto .modulo { display: block; }
@@ -340,6 +341,10 @@ function creaRigaBando(bando) {
   linkVeloci.className = "link-veloci";
   if (bando.opportunity_url) linkVeloci.innerHTML += `<a href="${attr(bando.opportunity_url)}" target="_blank" rel="noopener">Link al bando →</a>`;
   if (bando.organization_website) linkVeloci.innerHTML += `<a href="${attr(bando.organization_website)}" target="_blank" rel="noopener">Sito dell'ente →</a>`;
+  if (bando.link_verified_at) {
+    const data = new Date(bando.link_verified_at).toLocaleDateString("it-IT");
+    linkVeloci.innerHTML += `<span class="link-verificato">Link controllato il ${data}</span>`;
+  }
   if (linkVeloci.innerHTML) li.appendChild(linkVeloci);
 
   li.appendChild(creaModulo(bando));

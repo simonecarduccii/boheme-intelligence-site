@@ -138,6 +138,18 @@
     font-size: 0.85rem;
     margin-left: 0.5rem;
   }
+  .bando .riga-sommario .titolo .scadenza {
+    display: block;
+    font-weight: 400;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+  }
+  .avviso-incompleto {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    color: var(--accent);
+  }
   .badge {
     font-size: 0.72rem;
     padding: 0.15rem 0.5rem;
@@ -287,8 +299,7 @@ async function caricaBandi() {
   const { data, error } = await supabase
     .from("open_calls")
     .select("*")
-    .order("published", { ascending: true })
-    .order("created_at", { ascending: false });
+    .order("deadline", { ascending: true, nullsFirst: false });
 
   if (error) {
     statoElenco.textContent = "Non riesco a leggere i bandi: " + error.message;
@@ -315,6 +326,28 @@ function statoDaScadenza(deadlineIso) {
   return scadenza < oggi ? "expired" : "open";
 }
 
+function formattaScadenza(deadlineIso) {
+  if (!deadlineIso) return "Nessuna scadenza indicata";
+  const scadenza = new Date(deadlineIso);
+  if (isNaN(scadenza.getTime())) return "Nessuna scadenza indicata";
+  return "Scade il " + scadenza.toLocaleDateString("it-IT");
+}
+
+const CAMPI_UTILI = [
+  ["deadline", "scadenza"],
+  ["description", "descrizione"],
+  ["disciplines", "discipline"],
+  ["cost", "costo"],
+  ["organization_country", "paese dell'ente"],
+  ["application_email", "email per candidarsi"],
+];
+
+function campiMancanti(bando) {
+  return CAMPI_UTILI
+    .filter(([campo]) => !bando[campo])
+    .map(([, etichetta]) => etichetta);
+}
+
 function disegnaElenco() {
   const visibili = bandi.filter(corrisponde);
   statoElenco.textContent = visibili.length ? "" : "Nessun bando in questa vista.";
@@ -331,11 +364,20 @@ function creaRigaBando(bando) {
   sommario.innerHTML = `
     <div class="titolo">${escapeHtml(bando.title || "Senza titolo")}
       ${bando.organization_name ? `<span class="ente">${escapeHtml(bando.organization_name)}</span>` : ""}
+      <span class="scadenza">${escapeHtml(formattaScadenza(bando.deadline))}</span>
     </div>
     <span class="badge ${bando.published ? "pubblicato" : "bozza"}">${bando.published ? "Pubblicato" : "Da rivedere"}</span>
   `;
   sommario.addEventListener("click", () => li.classList.toggle("aperto"));
   li.appendChild(sommario);
+
+  const mancanti = campiMancanti(bando);
+  if (mancanti.length) {
+    const avviso = document.createElement("div");
+    avviso.className = "avviso-incompleto";
+    avviso.textContent = "Mancano: " + mancanti.join(", ");
+    li.appendChild(avviso);
+  }
 
   const linkVeloci = document.createElement("div");
   linkVeloci.className = "link-veloci";

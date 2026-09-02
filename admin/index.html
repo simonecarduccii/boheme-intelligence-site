@@ -187,6 +187,29 @@
 
   #stato-elenco { color: var(--muted); padding: 2rem 0; text-align: center; }
   #logout { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+
+  /* ---- sezioni (Bandi / Fonti da rivedere) ---- */
+  .sezioni {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1rem 0 0;
+  }
+  .sezioni button {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .sezioni button.attivo {
+    background: var(--card-bg);
+    color: var(--fg);
+    border-color: var(--accent);
+  }
+
+  /* ---- fonti da rivedere ---- */
+  .fonte { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.2rem; }
+  .fonte .titolo { font-weight: 600; }
+  .fonte .griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; margin-top: 0.5rem; }
+  .fonte .griglia .campo-largo { grid-column: 1 / -1; }
 </style>
 </head>
 <body>
@@ -210,13 +233,26 @@
     </div>
   </header>
   <main>
-    <div class="filtri">
-      <button data-filtro="da-rivedere" class="attivo">Da rivedere</button>
-      <button data-filtro="pubblicati">Pubblicati</button>
-      <button data-filtro="tutti">Tutti</button>
+    <nav class="sezioni">
+      <button data-sezione="bandi" class="attivo">Bandi</button>
+      <button data-sezione="fonti">Fonti da rivedere</button>
+    </nav>
+
+    <div id="vista-bandi">
+      <div class="filtri">
+        <button data-filtro="da-rivedere" class="attivo">Da rivedere</button>
+        <button data-filtro="pubblicati">Pubblicati</button>
+        <button data-filtro="tutti">Tutti</button>
+      </div>
+      <div id="stato-elenco"></div>
+      <ul id="elenco" class="elenco"></ul>
     </div>
-    <div id="stato-elenco"></div>
-    <ul id="elenco" class="elenco"></ul>
+
+    <div id="vista-fonti" hidden>
+      <p class="sotto" style="margin: 1rem 0;">Fonti attive senza nessun bando salvato oggi: controlla il sito e correggi l'indirizzo se serve.</p>
+      <div id="stato-fonti"></div>
+      <ul id="elenco-fonti" class="elenco"></ul>
+    </div>
   </main>
 </div>
 
@@ -252,9 +288,14 @@ const loginErrore = document.getElementById("login-errore");
 const utenteCorrente = document.getElementById("utente-corrente");
 const statoElenco = document.getElementById("stato-elenco");
 const elencoEl = document.getElementById("elenco");
+const vistaBandi = document.getElementById("vista-bandi");
+const vistaFonti = document.getElementById("vista-fonti");
+const statoFonti = document.getElementById("stato-fonti");
+const elencoFontiEl = document.getElementById("elenco-fonti");
 
 let filtroAttuale = "da-rivedere";
 let bandi = [];
+let fontiCaricate = false;
 
 function mostraApp(sessione) {
   loginEl.hidden = true;
@@ -290,6 +331,17 @@ document.querySelectorAll(".filtri button").forEach((bottone) => {
     bottone.classList.add("attivo");
     filtroAttuale = bottone.dataset.filtro;
     disegnaElenco();
+  });
+});
+
+document.querySelectorAll(".sezioni button").forEach((bottone) => {
+  bottone.addEventListener("click", () => {
+    document.querySelectorAll(".sezioni button").forEach((b) => b.classList.remove("attivo"));
+    bottone.classList.add("attivo");
+    const sezione = bottone.dataset.sezione;
+    vistaBandi.hidden = sezione !== "bandi";
+    vistaFonti.hidden = sezione !== "fonti";
+    if (sezione === "fonti" && !fontiCaricate) caricaFontiSenzaBandi();
   });
 });
 
@@ -492,6 +544,109 @@ function creaModulo(bando) {
   div.appendChild(azioni);
   div.appendChild(messaggio);
   return div;
+}
+
+async function caricaFontiSenzaBandi() {
+  statoFonti.textContent = "Carico le fonti…";
+  elencoFontiEl.innerHTML = "";
+
+  const [fontiRisposta, bandiRisposta] = await Promise.all([
+    supabase.from("sources").select("id, organization_name, website_url, opportunities_url, notes").eq("status", "active"),
+    supabase.from("open_calls").select("source_id"),
+  ]);
+
+  if (fontiRisposta.error) {
+    statoFonti.textContent = "Non riesco a leggere le fonti: " + fontiRisposta.error.message;
+    return;
+  }
+  if (bandiRisposta.error) {
+    statoFonti.textContent = "Non riesco a controllare i bandi salvati: " + bandiRisposta.error.message;
+    return;
+  }
+
+  const fontiConBandi = new Set(bandiRisposta.data.map((riga) => riga.source_id).filter(Boolean));
+  const fontiSenzaBandi = fontiRisposta.data.filter((fonte) => !fontiConBandi.has(fonte.id));
+
+  fontiCaricate = true;
+  statoFonti.textContent = fontiSenzaBandi.length ? "" : "Tutte le fonti attive hanno almeno un bando salvato.";
+  fontiSenzaBandi
+    .sort((a, b) => a.organization_name.localeCompare(b.organization_name))
+    .forEach((fonte) => elencoFontiEl.appendChild(creaRigaFonte(fonte)));
+}
+
+function creaRigaFonte(fonte) {
+  const li = document.createElement("li");
+  li.className = "fonte";
+
+  const titolo = document.createElement("div");
+  titolo.className = "titolo";
+  titolo.textContent = fonte.organization_name;
+  li.appendChild(titolo);
+
+  const linkVeloci = document.createElement("div");
+  linkVeloci.className = "link-veloci";
+  if (fonte.website_url) linkVeloci.innerHTML += `<a href="${attr(fonte.website_url)}" target="_blank" rel="noopener">Sito →</a>`;
+  if (fonte.opportunities_url) linkVeloci.innerHTML += `<a href="${attr(fonte.opportunities_url)}" target="_blank" rel="noopener">Pagina bandi →</a>`;
+  li.appendChild(linkVeloci);
+
+  const griglia = document.createElement("div");
+  griglia.className = "griglia";
+
+  const campoWebsite = document.createElement("div");
+  campoWebsite.innerHTML = `<label>Sito (website_url)</label>`;
+  const inputWebsite = document.createElement("input");
+  inputWebsite.value = fonte.website_url || "";
+  campoWebsite.appendChild(inputWebsite);
+  griglia.appendChild(campoWebsite);
+
+  const campoOpportunities = document.createElement("div");
+  campoOpportunities.innerHTML = `<label>Pagina bandi (opportunities_url)</label>`;
+  const inputOpportunities = document.createElement("input");
+  inputOpportunities.value = fonte.opportunities_url || "";
+  campoOpportunities.appendChild(inputOpportunities);
+  griglia.appendChild(campoOpportunities);
+
+  const campoNote = document.createElement("div");
+  campoNote.className = "campo-largo";
+  campoNote.innerHTML = `<label>Note</label>`;
+  const inputNote = document.createElement("textarea");
+  inputNote.value = fonte.notes || "";
+  campoNote.appendChild(inputNote);
+  griglia.appendChild(campoNote);
+
+  li.appendChild(griglia);
+
+  const azioni = document.createElement("div");
+  azioni.className = "azioni";
+  const messaggio = document.createElement("div");
+  messaggio.className = "messaggio";
+
+  const bottoneSalva = document.createElement("button");
+  bottoneSalva.className = "salva";
+  bottoneSalva.textContent = "Salva";
+  bottoneSalva.addEventListener("click", async () => {
+    messaggio.className = "messaggio";
+    messaggio.textContent = "Salvo…";
+    const modifiche = {
+      website_url: inputWebsite.value.trim() || null,
+      opportunities_url: inputOpportunities.value.trim() || null,
+      notes: inputNote.value.trim() || null,
+    };
+    const { error } = await supabase.from("sources").update(modifiche).eq("id", fonte.id);
+    if (error) {
+      messaggio.className = "messaggio errore";
+      messaggio.textContent = "Errore: " + error.message;
+      return;
+    }
+    Object.assign(fonte, modifiche);
+    messaggio.className = "messaggio ok";
+    messaggio.textContent = "Salvato.";
+  });
+  azioni.appendChild(bottoneSalva);
+  li.appendChild(azioni);
+  li.appendChild(messaggio);
+
+  return li;
 }
 
 function escapeHtml(testo) {

@@ -249,7 +249,7 @@
     </div>
 
     <div id="vista-fonti" hidden>
-      <p class="sotto" style="margin: 1rem 0;">Fonti attive senza nessun bando salvato oggi: controlla il sito e correggi l'indirizzo se serve.</p>
+      <p class="sotto" style="margin: 1rem 0;">Fonti il cui indirizzo salvato oggi non porta a un bando vero e proprio (secondo l'ultimo controllo di scripts/mappa_fonti.py): correggi l'indirizzo se il sito è cambiato.</p>
       <div id="stato-fonti"></div>
       <ul id="elenco-fonti" class="elenco"></ul>
     </div>
@@ -546,30 +546,39 @@ function creaModulo(bando) {
   return div;
 }
 
+const ESITI_ROTTI = ["HOMEPAGE", "PAGINA VUOTA", "NON RAGGIUNGIBILE", "INDIRIZZO MANCANTE"];
+
+const SPIEGAZIONE_ESITO = {
+  "HOMEPAGE": "l'indirizzo salvato non porta a un bando ne' a un elenco: probabilmente e' sbagliato o il sito e' cambiato.",
+  "PAGINA VUOTA": "il sito non si lascia leggere in modo semplice (contenuto caricato da JavaScript o accesso bloccato).",
+  "NON RAGGIUNGIBILE": "il sito non ha risposto quando e' stato controllato l'ultima volta.",
+  "INDIRIZZO MANCANTE": "questa fonte non ha nessun indirizzo salvato nel database.",
+};
+
 async function caricaFontiSenzaBandi() {
   statoFonti.textContent = "Carico le fonti…";
   elencoFontiEl.innerHTML = "";
 
-  const [fontiRisposta, bandiRisposta] = await Promise.all([
-    supabase.from("sources").select("id, organization_name, website_url, opportunities_url, notes").eq("status", "active"),
-    supabase.from("open_calls").select("source_id"),
+  const [saluteRisposta, totaliRisposta] = await Promise.all([
+    supabase
+      .from("source_health")
+      .select("source_id, organization_name, esito, dettaglio, link_suggeriti, checked_at, sources(website_url, opportunities_url, notes)")
+      .in("esito", ESITI_ROTTI),
+    supabase.from("sources").select("id", { count: "exact", head: true }).eq("status", "active"),
   ]);
 
-  if (fontiRisposta.error) {
-    statoFonti.textContent = "Non riesco a leggere le fonti: " + fontiRisposta.error.message;
+  if (saluteRisposta.error) {
+    statoFonti.textContent = "Non riesco a leggere lo stato delle fonti: " + saluteRisposta.error.message;
     return;
   }
-  if (bandiRisposta.error) {
-    statoFonti.textContent = "Non riesco a controllare i bandi salvati: " + bandiRisposta.error.message;
-    return;
-  }
-
-  const fontiConBandi = new Set(bandiRisposta.data.map((riga) => riga.source_id).filter(Boolean));
-  const fontiSenzaBandi = fontiRisposta.data.filter((fonte) => !fontiConBandi.has(fonte.id));
 
   fontiCaricate = true;
-  statoFonti.textContent = fontiSenzaBandi.length ? "" : "Tutte le fonti attive hanno almeno un bando salvato.";
-  fontiSenzaBandi
+  const rotte = saluteRisposta.data;
+  const totale = totaliRisposta.count ?? "?";
+  statoFonti.textContent = rotte.length
+    ? `${rotte.length} fonti su ${totale} non portano oggi a un bando vero e proprio.`
+    : `Tutte le ${totale} fonti attive portano oggi a un bando o a un elenco di bandi.`;
+  rotte
     .sort((a, b) => a.organization_name.localeCompare(b.organization_name))
     .forEach((fonte) => elencoFontiEl.appendChild(creaRigaFonte(fonte)));
 }
@@ -577,17 +586,33 @@ async function caricaFontiSenzaBandi() {
 function creaRigaFonte(fonte) {
   const li = document.createElement("li");
   li.className = "fonte";
+  const s = fonte.sources || {};
 
   const titolo = document.createElement("div");
   titolo.className = "titolo";
   titolo.textContent = fonte.organization_name;
   li.appendChild(titolo);
 
+  const stato = document.createElement("div");
+  stato.className = "avviso-incompleto";
+  const spiegazione = SPIEGAZIONE_ESITO[fonte.esito] || "";
+  const quando = fonte.checked_at ? new Date(fonte.checked_at).toLocaleString("it-IT") : "";
+  stato.textContent = `${fonte.esito}${spiegazione ? " — " + spiegazione : ""}${quando ? " (controllato il " + quando + ")" : ""}`;
+  li.appendChild(stato);
+
   const linkVeloci = document.createElement("div");
   linkVeloci.className = "link-veloci";
-  if (fonte.website_url) linkVeloci.innerHTML += `<a href="${attr(fonte.website_url)}" target="_blank" rel="noopener">Sito →</a>`;
-  if (fonte.opportunities_url) linkVeloci.innerHTML += `<a href="${attr(fonte.opportunities_url)}" target="_blank" rel="noopener">Pagina bandi →</a>`;
-  li.appendChild(linkVeloci);
+  if (s.website_url) linkVeloci.innerHTML += `<a href="${attr(s.website_url)}" target="_blank" rel="noopener">Sito →</a>`;
+  if (s.opportunities_url) linkVeloci.innerHTML += `<a href="${attr(s.opportunities_url)}" target="_blank" rel="noopener">Pagina bandi →</a>`;
+  if (linkVeloci.innerHTML) li.appendChild(linkVeloci);
+
+  if (fonte.link_suggeriti && fonte.link_suggeriti.length) {
+    const suggeriti = document.createElement("div");
+    suggeriti.className = "link-veloci";
+    suggeriti.innerHTML = "Candidati trovati sulla pagina: " +
+      fonte.link_suggeriti.map((l) => `<a href="${attr(l)}" target="_blank" rel="noopener">${escapeHtml(l)}</a>`).join(", ");
+    li.appendChild(suggeriti);
+  }
 
   const griglia = document.createElement("div");
   griglia.className = "griglia";
@@ -595,14 +620,14 @@ function creaRigaFonte(fonte) {
   const campoWebsite = document.createElement("div");
   campoWebsite.innerHTML = `<label>Sito (website_url)</label>`;
   const inputWebsite = document.createElement("input");
-  inputWebsite.value = fonte.website_url || "";
+  inputWebsite.value = s.website_url || "";
   campoWebsite.appendChild(inputWebsite);
   griglia.appendChild(campoWebsite);
 
   const campoOpportunities = document.createElement("div");
   campoOpportunities.innerHTML = `<label>Pagina bandi (opportunities_url)</label>`;
   const inputOpportunities = document.createElement("input");
-  inputOpportunities.value = fonte.opportunities_url || "";
+  inputOpportunities.value = s.opportunities_url || "";
   campoOpportunities.appendChild(inputOpportunities);
   griglia.appendChild(campoOpportunities);
 
@@ -610,7 +635,7 @@ function creaRigaFonte(fonte) {
   campoNote.className = "campo-largo";
   campoNote.innerHTML = `<label>Note</label>`;
   const inputNote = document.createElement("textarea");
-  inputNote.value = fonte.notes || "";
+  inputNote.value = s.notes || "";
   campoNote.appendChild(inputNote);
   griglia.appendChild(campoNote);
 
@@ -632,15 +657,15 @@ function creaRigaFonte(fonte) {
       opportunities_url: inputOpportunities.value.trim() || null,
       notes: inputNote.value.trim() || null,
     };
-    const { error } = await supabase.from("sources").update(modifiche).eq("id", fonte.id);
+    const { error } = await supabase.from("sources").update(modifiche).eq("id", fonte.source_id);
     if (error) {
       messaggio.className = "messaggio errore";
       messaggio.textContent = "Errore: " + error.message;
       return;
     }
-    Object.assign(fonte, modifiche);
+    Object.assign(s, modifiche);
     messaggio.className = "messaggio ok";
-    messaggio.textContent = "Salvato.";
+    messaggio.textContent = "Salvato. Il nuovo indirizzo verrà controllato al prossimo giro di scripts/mappa_fonti.py.";
   });
   azioni.appendChild(bottoneSalva);
   li.appendChild(azioni);

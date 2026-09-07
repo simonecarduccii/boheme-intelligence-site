@@ -158,6 +158,38 @@
   }
   .badge.pubblicato { background: rgba(79,157,110,0.2); color: var(--ok); }
   .badge.bozza { background: rgba(217,138,61,0.2); color: var(--accent); }
+  .badge.proposta { background: rgba(90,140,220,0.22); color: #8fb4ee; }
+
+  /* ---- versione nuova proposta dal robot (DEC-034) ---- */
+  .proposta {
+    margin-top: 0.7rem;
+    border: 1px solid rgba(90,140,220,0.45);
+    border-radius: 6px;
+    background: rgba(90,140,220,0.07);
+    padding: 0.7rem 0.8rem;
+  }
+  .proposta h4 {
+    margin: 0 0 0.15rem;
+    font-size: 0.86rem;
+    color: #8fb4ee;
+  }
+  .proposta .quando { font-size: 0.76rem; color: var(--muted); }
+  .proposta table { width: 100%; border-collapse: collapse; margin-top: 0.6rem; font-size: 0.82rem; }
+  .proposta th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--muted);
+    padding: 0.25rem 0.6rem 0.25rem 0;
+    vertical-align: top;
+    width: 9rem;
+  }
+  .proposta td { padding: 0.25rem 0; vertical-align: top; }
+  .proposta .prima { color: var(--muted); text-decoration: line-through; }
+  .proposta .dopo { color: var(--fg); }
+  .proposta .azioni-proposta { margin-top: 0.7rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .proposta button { font-size: 0.82rem; padding: 0.35rem 0.7rem; border: 0; border-radius: 5px; cursor: pointer; }
+  .proposta .sostituisci { background: #4a72b8; color: #fff; font-weight: 600; }
+  .proposta .tieni { background: #3a3b40; color: var(--fg); }
   .link-veloci { margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap; }
   .link-veloci a { color: var(--accent); font-size: 0.82rem; text-decoration: none; }
   .link-veloci a:hover { text-decoration: underline; }
@@ -241,6 +273,7 @@
     <div id="vista-bandi">
       <div class="filtri">
         <button data-filtro="da-rivedere" class="attivo">Da rivedere</button>
+        <button data-filtro="proposte">Versione nuova</button>
         <button data-filtro="pubblicati">Pubblicati</button>
         <button data-filtro="tutti">Tutti</button>
       </div>
@@ -363,6 +396,7 @@ async function caricaBandi() {
 
 function corrisponde(bando) {
   if (filtroAttuale === "pubblicati") return bando.published;
+  if (filtroAttuale === "proposte") return Boolean(bando.pending_update);
   if (filtroAttuale === "tutti") return true;
   return !bando.published; // da-rivedere
 }
@@ -419,6 +453,7 @@ function creaRigaBando(bando) {
       <span class="scadenza">${escapeHtml(formattaScadenza(bando.deadline))}</span>
     </div>
     <span class="badge ${bando.published ? "pubblicato" : "bozza"}">${bando.published ? "Pubblicato" : "Da rivedere"}</span>
+    ${bando.pending_update ? `<span class="badge proposta">Versione nuova</span>` : ""}
   `;
   sommario.addEventListener("click", () => li.classList.toggle("aperto"));
   li.appendChild(sommario);
@@ -430,6 +465,8 @@ function creaRigaBando(bando) {
     avviso.textContent = "Mancano: " + mancanti.join(", ");
     li.appendChild(avviso);
   }
+
+  if (bando.pending_update) li.appendChild(creaProposta(bando));
 
   const linkVeloci = document.createElement("div");
   linkVeloci.className = "link-veloci";
@@ -443,6 +480,129 @@ function creaRigaBando(bando) {
 
   li.appendChild(creaModulo(bando));
   return li;
+}
+
+// ---- versione nuova proposta dal robot (DEC-034) --------------------------
+//
+// Quando il crawler rilegge una fonte e trova qualcosa di diverso su un
+// bando gia' salvato, non lo sostituisce: deposita la versione nuova in
+// pending_update. Qui la si mostra accanto a quella attuale, campo per
+// campo, e si decide. Stessa lista di campi confrontati in
+// python/db/open_calls_sync.py::_CAMPI_CONFRONTATI: tenerle allineate.
+
+const CAMPI_PROPOSTA = [
+  ["title", "titolo"],
+  ["organization_name", "ente"],
+  ["deadline", "scadenza"],
+  ["cost", "costo"],
+  ["prizes", "premi"],
+  ["eligibility", "per chi"],
+  ["disciplines", "discipline"],
+  ["location", "dove"],
+  ["exhibition", "esposizione"],
+  ["description", "descrizione"],
+  ["organization_country", "paese"],
+  ["organization_website", "sito dell'ente"],
+  ["application_email", "email"],
+];
+
+function testoCampo(valore, campo) {
+  if (valore === null || valore === undefined || valore === "") return "—";
+  if (campo === "deadline") return formattaScadenza(valore);
+  return String(valore);
+}
+
+function stessoValore(a, b, campo) {
+  if (campo === "deadline") {
+    return String(a || "").slice(0, 10) === String(b || "").slice(0, 10);
+  }
+  return String(a ?? "").trim() === String(b ?? "").trim();
+}
+
+function creaProposta(bando) {
+  const nuova = bando.pending_update;
+  const box = document.createElement("div");
+  box.className = "proposta";
+
+  const quando = bando.pending_update_at
+    ? new Date(bando.pending_update_at).toLocaleDateString("it-IT")
+    : null;
+
+  const intestazione = document.createElement("div");
+  intestazione.innerHTML = `
+    <h4>Il robot ha riletto questo bando e propone una versione nuova</h4>
+    <div class="quando">${quando ? "Letta il " + escapeHtml(quando) : ""} — decidi tu se sostituire</div>
+  `;
+  box.appendChild(intestazione);
+
+  const differenze = CAMPI_PROPOSTA.filter(
+    ([campo]) => !stessoValore(bando[campo], nuova[campo], campo)
+  );
+
+  const tabella = document.createElement("table");
+  tabella.innerHTML = differenze
+    .map(
+      ([campo, etichetta]) => `
+        <tr>
+          <th>${escapeHtml(etichetta)}</th>
+          <td>
+            <div class="prima">${escapeHtml(testoCampo(bando[campo], campo))}</div>
+            <div class="dopo">${escapeHtml(testoCampo(nuova[campo], campo))}</div>
+          </td>
+        </tr>`
+    )
+    .join("");
+  box.appendChild(tabella);
+
+  const messaggio = document.createElement("div");
+  messaggio.className = "messaggio";
+
+  async function decidi(patch, testoOk) {
+    messaggio.className = "messaggio";
+    messaggio.textContent = "Salvo…";
+    const { error } = await supabase.from("open_calls").update(patch).eq("id", bando.id);
+    if (error) {
+      messaggio.className = "messaggio errore";
+      messaggio.textContent = "Errore: " + error.message;
+      return;
+    }
+    Object.assign(bando, patch);
+    messaggio.className = "messaggio ok";
+    messaggio.textContent = testoOk;
+    disegnaElenco();
+  }
+
+  const azioni = document.createElement("div");
+  azioni.className = "azioni-proposta";
+
+  const bottoneSostituisci = document.createElement("button");
+  bottoneSostituisci.className = "sostituisci";
+  bottoneSostituisci.textContent = "Sostituisci con la versione nuova";
+  bottoneSostituisci.addEventListener("click", () => {
+    // Solo i campi del contenuto: se il bando era gia' pubblicato resta
+    // pubblicato, la decisione editoriale non si tocca.
+    const patch = { pending_update: null, pending_update_at: null };
+    CAMPI_PROPOSTA.forEach(([campo]) => {
+      patch[campo] = nuova[campo] ?? null;
+    });
+    patch.opportunity_url = nuova.opportunity_url ?? bando.opportunity_url;
+    patch.status = statoDaScadenza(patch.deadline);
+    if (nuova.raw_data) patch.raw_data = nuova.raw_data;
+    decidi(patch, "Sostituito con la versione nuova.");
+  });
+  azioni.appendChild(bottoneSostituisci);
+
+  const bottoneTieni = document.createElement("button");
+  bottoneTieni.className = "tieni";
+  bottoneTieni.textContent = "Tieni questa, scarta la proposta";
+  bottoneTieni.addEventListener("click", () =>
+    decidi({ pending_update: null, pending_update_at: null }, "Proposta scartata.")
+  );
+  azioni.appendChild(bottoneTieni);
+
+  box.appendChild(azioni);
+  box.appendChild(messaggio);
+  return box;
 }
 
 function creaModulo(bando) {

@@ -971,7 +971,17 @@ function creaRigaCandidato(candidato) {
 
   const linkVeloci = document.createElement("div");
   linkVeloci.className = "link-veloci";
-  linkVeloci.innerHTML = `<a href="${attr(candidato.website_url)}" target="_blank" rel="noopener">${escapeHtml(candidato.website_url)} →</a>`;
+  let linkHtml = `<a href="${attr(candidato.website_url)}" target="_blank" rel="noopener">Sito →</a>`;
+  if (candidato.instagram_url) {
+    const follower = candidato.instagram_followers != null
+      ? " (" + Number(candidato.instagram_followers).toLocaleString("it-IT") + " follower)"
+      : "";
+    linkHtml += `<a href="${attr(candidato.instagram_url)}" target="_blank" rel="noopener">Instagram${escapeHtml(follower)} →</a>`;
+  }
+  if (candidato.contact_email) {
+    linkHtml += `<a href="mailto:${attr(candidato.contact_email)}">${escapeHtml(candidato.contact_email)}</a>`;
+  }
+  linkVeloci.innerHTML = linkHtml;
   li.appendChild(linkVeloci);
 
   const messaggio = document.createElement("div");

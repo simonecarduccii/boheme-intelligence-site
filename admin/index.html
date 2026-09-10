@@ -159,6 +159,9 @@
   .badge.pubblicato { background: rgba(79,157,110,0.2); color: var(--ok); }
   .badge.bozza { background: rgba(217,138,61,0.2); color: var(--accent); }
   .badge.proposta { background: rgba(90,140,220,0.22); color: #8fb4ee; }
+  .badge.da_valutare { background: rgba(217,138,61,0.2); color: var(--accent); }
+  .badge.approvato { background: rgba(79,157,110,0.2); color: var(--ok); }
+  .badge.scartato { background: rgba(192,80,63,0.2); color: var(--accent-danger); }
 
   /* ---- versione nuova proposta dal robot (DEC-034) ---- */
   .proposta {
@@ -242,6 +245,28 @@
   .fonte .titolo { font-weight: 600; }
   .fonte .griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; margin-top: 0.5rem; }
   .fonte .griglia .campo-largo { grid-column: 1 / -1; }
+
+  /* ---- fonti candidate ---- */
+  .avviso-silenzio {
+    background: rgba(192,80,63,0.12);
+    border: 1px solid rgba(192,80,63,0.4);
+    color: var(--accent-danger);
+    border-radius: 8px;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.85rem;
+  }
+  .candidato { background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.2rem; }
+  .candidato .riga-sommario { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  .candidato .titolo { font-weight: 600; }
+  .candidato .regione { font-weight: 400; color: var(--muted); font-size: 0.82rem; margin-left: 0.5rem; }
+  .candidato .trovata { font-size: 0.78rem; color: var(--muted); margin-top: 0.15rem; }
+  .candidato .motivo { margin-top: 0.5rem; font-size: 0.88rem; }
+  .candidato .link-veloci { margin-top: 0.4rem; }
+  .candidato .azioni .approva { background: var(--ok); color: #0d1a12; font-weight: 600; }
+  .candidato .azioni .scarta { background: var(--accent-danger); color: #fff; }
+  .candidato .azioni .annulla-scarto { background: #3a3b40; color: var(--fg); }
+  .candidato .nota-scarto { margin-top: 0.6rem; }
+  .candidato .decisione { margin-top: 0.5rem; font-size: 0.82rem; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -268,6 +293,7 @@
     <nav class="sezioni">
       <button data-sezione="bandi" class="attivo">Bandi</button>
       <button data-sezione="fonti">Fonti da rivedere</button>
+      <button data-sezione="candidate">Fonti candidate</button>
     </nav>
 
     <div id="vista-bandi">
@@ -285,6 +311,18 @@
       <p class="sotto" style="margin: 1rem 0;">Fonti il cui indirizzo salvato oggi non porta a un bando vero e proprio (secondo l'ultimo controllo di scripts/mappa_fonti.py): correggi l'indirizzo se il sito è cambiato.</p>
       <div id="stato-fonti"></div>
       <ul id="elenco-fonti" class="elenco"></ul>
+    </div>
+
+    <div id="vista-candidate" hidden>
+      <p class="sotto" style="margin: 1rem 0;">Organizzazioni nuove trovate dall'agente di scoperta fonti (boheme-vedetta, subagente 1), non ancora monitorate. Approva quelle da tenere d'occhio, scarta le altre — la decisione resta tua. Un candidato approvato non è ancora monitorato: va aggiunto per bene a "sources" insieme a Claude.</p>
+      <div id="battito-candidate" class="sotto" style="margin-bottom: 1rem;"></div>
+      <div class="filtri">
+        <button data-filtro-candidato="da_valutare" class="attivo">Da valutare</button>
+        <button data-filtro-candidato="approvato">Approvate</button>
+        <button data-filtro-candidato="scartato">Scartate</button>
+      </div>
+      <div id="stato-candidate"></div>
+      <ul id="elenco-candidate" class="elenco"></ul>
     </div>
   </main>
 </div>
@@ -325,10 +363,17 @@ const vistaBandi = document.getElementById("vista-bandi");
 const vistaFonti = document.getElementById("vista-fonti");
 const statoFonti = document.getElementById("stato-fonti");
 const elencoFontiEl = document.getElementById("elenco-fonti");
+const vistaCandidate = document.getElementById("vista-candidate");
+const battitoCandidate = document.getElementById("battito-candidate");
+const statoCandidate = document.getElementById("stato-candidate");
+const elencoCandidateEl = document.getElementById("elenco-candidate");
 
 let filtroAttuale = "da-rivedere";
 let bandi = [];
 let fontiCaricate = false;
+let filtroCandidatoAttuale = "da_valutare";
+let candidati = [];
+let candidatiCaricati = false;
 
 function mostraApp(sessione) {
   loginEl.hidden = true;
@@ -374,7 +419,18 @@ document.querySelectorAll(".sezioni button").forEach((bottone) => {
     const sezione = bottone.dataset.sezione;
     vistaBandi.hidden = sezione !== "bandi";
     vistaFonti.hidden = sezione !== "fonti";
+    vistaCandidate.hidden = sezione !== "candidate";
     if (sezione === "fonti" && !fontiCaricate) caricaFontiSenzaBandi();
+    if (sezione === "candidate" && !candidatiCaricati) caricaCandidate();
+  });
+});
+
+document.querySelectorAll("[data-filtro-candidato]").forEach((bottone) => {
+  bottone.addEventListener("click", () => {
+    document.querySelectorAll("[data-filtro-candidato]").forEach((b) => b.classList.remove("attivo"));
+    bottone.classList.add("attivo");
+    filtroCandidatoAttuale = bottone.dataset.filtroCandidato;
+    disegnaCandidate();
   });
 });
 
@@ -831,6 +887,178 @@ function creaRigaFonte(fonte) {
   li.appendChild(azioni);
   li.appendChild(messaggio);
 
+  return li;
+}
+
+// ---- fonti candidate (subagente 1 di boheme-vedetta, DEC-V03) ------------
+
+const ETICHETTA_REGIONE = { Italia: "Italia", Europa: "Europa", Internazionale: "Internazionale" };
+
+function formattaData(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("it-IT");
+}
+
+function giorniDa(iso) {
+  if (!iso) return Infinity;
+  return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24);
+}
+
+async function caricaCandidate() {
+  statoCandidate.textContent = "Carico le fonti candidate…";
+  elencoCandidateEl.innerHTML = "";
+  battitoCandidate.innerHTML = "";
+
+  const [candidatiRisposta, battitoRisposta] = await Promise.all([
+    supabase.from("source_candidates").select("*").order("found_at", { ascending: false }),
+    supabase.from("vedetta_agent_runs").select("run_at, candidates_found, note").order("run_at", { ascending: false }).limit(1),
+  ]);
+
+  if (candidatiRisposta.error) {
+    statoCandidate.textContent = "Non riesco a leggere le fonti candidate: " + candidatiRisposta.error.message;
+    return;
+  }
+
+  candidatiCaricati = true;
+  candidati = candidatiRisposta.data;
+
+  const ultimoBattito = battitoRisposta.data && battitoRisposta.data[0];
+  if (!ultimoBattito) {
+    battitoCandidate.textContent = "Nessun controllo eseguito ancora.";
+  } else {
+    const eta = giorniDa(ultimoBattito.run_at);
+    const base = `Ultimo controllo: ${formattaData(ultimoBattito.run_at)} — ${ultimoBattito.candidates_found} ${ultimoBattito.candidates_found === 1 ? "fonte nuova" : "fonti nuove"} trovate.`;
+    if (eta > 10) {
+      battitoCandidate.innerHTML = `<div class="avviso-silenzio">Attenzione: nessun controllo da più di 10 giorni. ${escapeHtml(base)}</div>`;
+    } else {
+      battitoCandidate.textContent = base;
+    }
+  }
+
+  disegnaCandidate();
+}
+
+function disegnaCandidate() {
+  const visibili = candidati.filter((c) => c.status === filtroCandidatoAttuale);
+  statoCandidate.textContent = visibili.length ? "" : "Nessuna fonte in questa vista.";
+  elencoCandidateEl.innerHTML = "";
+  visibili.forEach((c) => elencoCandidateEl.appendChild(creaRigaCandidato(c)));
+}
+
+function creaRigaCandidato(candidato) {
+  const li = document.createElement("li");
+  li.className = "candidato";
+
+  const sommario = document.createElement("div");
+  sommario.className = "riga-sommario";
+  sommario.innerHTML = `
+    <div class="titolo">${escapeHtml(candidato.organization_name)}
+      ${candidato.region ? `<span class="regione">${escapeHtml(ETICHETTA_REGIONE[candidato.region] || candidato.region)}</span>` : ""}
+      <span class="trovata">trovata il ${escapeHtml(formattaData(candidato.found_at))}</span>
+    </div>
+    <span class="badge ${escapeHtml(candidato.status)}">${candidato.status === "da_valutare" ? "Da valutare" : candidato.status === "approvato" ? "Approvata" : "Scartata"}</span>
+  `;
+  li.appendChild(sommario);
+
+  if (candidato.reason) {
+    const motivo = document.createElement("div");
+    motivo.className = "motivo";
+    motivo.textContent = candidato.reason;
+    li.appendChild(motivo);
+  }
+
+  const linkVeloci = document.createElement("div");
+  linkVeloci.className = "link-veloci";
+  linkVeloci.innerHTML = `<a href="${attr(candidato.website_url)}" target="_blank" rel="noopener">${escapeHtml(candidato.website_url)} →</a>`;
+  li.appendChild(linkVeloci);
+
+  const messaggio = document.createElement("div");
+  messaggio.className = "messaggio";
+
+  async function decidi(patch, testoOk) {
+    messaggio.className = "messaggio";
+    messaggio.textContent = "Salvo…";
+    const { error } = await supabase.from("source_candidates").update(patch).eq("id", candidato.id);
+    if (error) {
+      messaggio.className = "messaggio errore";
+      messaggio.textContent = "Errore: " + error.message;
+      return;
+    }
+    Object.assign(candidato, patch);
+    messaggio.className = "messaggio ok";
+    messaggio.textContent = testoOk;
+    disegnaCandidate();
+  }
+
+  if (candidato.status === "da_valutare") {
+    const azioni = document.createElement("div");
+    azioni.className = "azioni";
+
+    const bottoneApprova = document.createElement("button");
+    bottoneApprova.className = "approva";
+    bottoneApprova.textContent = "Approva";
+    bottoneApprova.addEventListener("click", () =>
+      decidi(
+        { status: "approvato", decided_at: new Date().toISOString(), decided_note: null },
+        "Approvata. Non è ancora monitorata: va aggiunta per bene a \"sources\" insieme a Claude."
+      )
+    );
+    azioni.appendChild(bottoneApprova);
+
+    const bottoneScarta = document.createElement("button");
+    bottoneScarta.className = "scarta";
+    bottoneScarta.textContent = "Scarta";
+    bottoneScarta.addEventListener("click", () => {
+      azioni.hidden = true;
+      notaScarto.hidden = false;
+    });
+    azioni.appendChild(bottoneScarta);
+
+    li.appendChild(azioni);
+
+    const notaScarto = document.createElement("div");
+    notaScarto.className = "nota-scarto";
+    notaScarto.hidden = true;
+    notaScarto.innerHTML = `<label>Perché la scarti? (facoltativo)</label>`;
+    const inputNota = document.createElement("textarea");
+    notaScarto.appendChild(inputNota);
+    const azioniScarto = document.createElement("div");
+    azioniScarto.className = "azioni";
+
+    const bottoneConferma = document.createElement("button");
+    bottoneConferma.className = "scarta";
+    bottoneConferma.textContent = "Conferma scarto";
+    bottoneConferma.addEventListener("click", () =>
+      decidi(
+        { status: "scartato", decided_at: new Date().toISOString(), decided_note: inputNota.value.trim() || null },
+        "Scartata."
+      )
+    );
+    azioniScarto.appendChild(bottoneConferma);
+
+    const bottoneAnnulla = document.createElement("button");
+    bottoneAnnulla.className = "annulla-scarto";
+    bottoneAnnulla.textContent = "Annulla";
+    bottoneAnnulla.addEventListener("click", () => {
+      notaScarto.hidden = true;
+      azioni.hidden = false;
+    });
+    azioniScarto.appendChild(bottoneAnnulla);
+
+    notaScarto.appendChild(azioniScarto);
+    li.appendChild(notaScarto);
+  } else {
+    const decisione = document.createElement("div");
+    decisione.className = "decisione";
+    decisione.textContent =
+      `${candidato.status === "approvato" ? "Approvata" : "Scartata"} il ${formattaData(candidato.decided_at)}` +
+      (candidato.decided_note ? ` — ${candidato.decided_note}` : "");
+    li.appendChild(decisione);
+  }
+
+  li.appendChild(messaggio);
   return li;
 }
 
